@@ -1,164 +1,141 @@
-# ExpressChain - Blockchain Simulator
+# ShelfLife Household Inventory Tracker
 
-
-## What You'll Build
-
-* Transaction mempool & mining
-* Proof-of-Work (SHA256 hashing)
-* Wallet balances with overspend protection
-* Live web dashboard
+**Stack:** MongoDB · Express · Node.js · React (MERN)
 
 ---
 
-## Quick Start
+## Assignment Overview
 
-```bash
-npm init -y
-npm install express
-mkdir public
-
-# Copy server.js & public/index.html
-node server.js
-
-# Visit:
-http://localhost:3000
-```
+Build a collaborative expiry tracking application for shared households. Roommates manage groceries together, receive expiration alerts, and compete to reduce waste.
 
 ---
 
-## How It Works
+## Core Requirements
 
-```
-1. Type transactions: Alice→Bob: 100
-2. Transactions → Mempool (pending)
-3. Every 10s → Mine Block (Proof-of-Work)
-4. Block → Ledger (permanent storage)
-5. Check balances live
-```
+### 1. Authentication & User Management
+- [ ] User registration and login with JWT
+- [ ] Protected routes middleware
+- [ ] User profile with joined household display
+
+### 2. Household System
+- [ ] Create household with auto-generated invite code (6 characters)
+- [ ] Join household using invite code
+- [ ] View all household members
+- [ ] Leave household functionality
+
+### 3. Inventory Management
+- [ ] Add items with: name, category, expiry date, quantity
+- [ ] Auto-assign status: `fresh`, `expiring-soon` (≤3 days), `expired`
+- [ ] Edit and delete items (only by creator or household admin)
+- [ ] Barcode scanner integration (browser-based)
+
+### 4. Dashboard & Alerts
+- [ ] Visual shelf display: Fresh (green) / Expiring Soon (yellow) / Expired (red)
+- [ ] Count badges for each status category
+- [ ] Sort and filter by category or expiry date
+
+### 5. Waste Tracking
+- [ ] Mark items as `used` or `wasted`
+- [ ] Calculate household waste score: `(used / total) × 100`
+- [ ] Simple leaderboard showing top contributors
+
+### 6. Automated Notifications
+- [ ] Daily cron job checking expiring items
+- [ ] Email digest to all household members (Nodemailer)
+- [ ] List items expiring within 24 hours
 
 ---
 
-##  Features
+## Technical Constraints
 
-* Pre-funded wallets (Alice: 1000, Bob: 500, etc.)
-* Overspending protection (balance validation)
-* Real SHA256 mining with nonce
-* Responsive UI with stats dashboard
-* Balance checker for any address
-
----
-
-## Test It
-
-```
-1. Alice→Bob: 100   → Alice: 900, Bob: 600
-2. Bob→Carol: 50    → Bob: 550, Carol: 800
-3. Check "Alice"    → View live balance
-4. Watch mining     → New block every 10 seconds
-```
+| Rule | Implementation |
+|------|---------------|
+| **No AI services** | Use date math and database queries only |
+| **No external APIs** | Except open barcode database for product names |
+| **MongoDB only** | All data persistence via Mongoose |
+| **React functional components** | Hooks only, no class components |
 
 ---
 
-## Internal Structure (How to Build It)
+## Database Schema
 
-### Transaction Object
-
-```js
+```javascript
+// User
 {
-  from: "Alice",
-  to: "Bob",
-  amount: 100
+  _id: ObjectId,
+  name: String,           // required, 2-30 chars
+  email: String,          // required, unique
+  password: String,       // hashed, min 6 chars
+  householdId: ObjectId,  // nullable
+  createdAt: Date
 }
-```
 
-* Created from user input
-* Pushed to the **mempool** (array)
-
----
-
-### Mempool
-
-```js
-let mempool = [];
-```
-
-* Stores all pending transactions
-* Cleared after mining a block
-
----
-
-### Block Object
-
-```js
+// Household
 {
-  index: 1,
-  timestamp: Date.now(),
-  transactions: [...],
-  prevHash: "abc123",
-  nonce: 0,
-  hash: "0000xyz..."
+  _id: ObjectId,
+  name: String,           // required, 3-30 chars
+  inviteCode: String,     // unique, 6 chars uppercase
+  members: [ObjectId],  // user references
+  wasteScore: Number,     // 0-100, default 0
+  createdAt: Date
+}
+
+// Item
+{
+  _id: ObjectId,
+  householdId: ObjectId,  // required
+  addedBy: ObjectId,      // user reference
+  name: String,           // required
+  category: String,       // enum: produce, dairy, meat, pantry, frozen, other
+  quantity: Number,       // default 1
+  expiryDate: Date,       // required
+  status: String,         // enum: fresh, expiring-soon, expired, used, wasted
+  createdAt: Date,
+  updatedAt: Date
 }
 ```
 
----
+## API Specification
 
-### Mining Logic (Core Idea)
+### Authentication
+| Method | Endpoint | Body | Response |
+|--------|----------|------|----------|
+| POST | /api/auth/register | {name, email, password} | {token, user} |
+| POST | /api/auth/login | {email, password} | {token, user} |
 
-```js
-while (!hash.startsWith("0000")) {
-  nonce++;
-  hash = sha256(data + nonce);
-}
-```
+### Households
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | /api/households | Yes | Create new household |
+| POST | /api/households/join | Yes | {inviteCode} → join existing |
+| GET | /api/households/me | Yes | Get current user's household |
+| GET | /api/households/:id/members | Yes | List all members |
 
-* Keep changing `nonce`
-* Until hash meets difficulty condition
+### Items
+| Method | Endpoint | Query Params | Description |
+|--------|----------|--------------|-------------|
+| GET | /api/items | ?status=&category= | List household items |
+| POST | /api/items | — | Create new item |
+| PUT | /api/items/:id | — | Update item details |
+| PATCH | /api/items/:id/status | {status} | Mark used/wasted |
+| DELETE | /api/items/:id | — | Remove item |
 
----
-
-### Blockchain
-
-```js
-let chain = [genesisBlock];
-```
-
-* Array of blocks
-* Each block links via `prevHash`
-
----
-
-### Flow
-
-```
-Input → Transaction → Mempool → Mine → Block → Chain
-```
-
+### Dashboard
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /api/dashboard/stats | Waste score, counts by status |
+| GET | /api/dashboard/expiring | Items expiring in 24h |
 
 ---
 
-## Extra Tasks
+## Frontend Requirements
 
-* Easy: Limit max 5 transactions per block
-* Medium: Persist ledger to a JSON file
-
----
-
-## Note
-
-This is a **simple Web2 application** built with Node.js and basic JavaScript.
-
-You **don’t need any Web3 or blockchain experience** to build this.
-
-* Everything runs locally
-* No wallets, no networks, no crypto setup
-* Just objects, arrays, and logic
-
-The required structures (transactions, blocks, chain) are already explained in the **Internal Structure** section—follow that and build step by step.
-
-If you’re curious, you can later explore how these concepts apply to real blockchains—but that’s optional.
-
----
-
-## Demo UI
-
-![Demo UI](https://jad7ulghye.ufs.sh/f/hb6AeldjPrMw2d1PZxJ9u0sAqILKw7VtUbHOi8zajexShDmr)
+### Routes
+| Path | Component | Access |
+|------|-----------|--------|
+| /login | LoginForm | Public |
+| /register | RegisterForm | Public |
+| /dashboard | Dashboard | Private |
+| /household | HouseholdManager | Private |
+| /items | InventoryList | Private |
+| /add | AddItemForm | Private |
